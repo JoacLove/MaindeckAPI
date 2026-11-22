@@ -15,6 +15,9 @@ const detailHost = document.getElementById("detailHost");
 const jobsMeta = document.getElementById("jobsMeta");
 const detailMeta = document.getElementById("detailMeta");
 const tabs = document.getElementById("resourceTabs");
+const supplyFilters = document.getElementById("supplyFilters");
+const categoryFilter = document.getElementById("categoryFilter");
+const supplySearch = document.getElementById("supplySearch");
 
 const state = {
   me: null,
@@ -23,6 +26,7 @@ const state = {
   allProjects: [],
   shipsByTeam: new Map(),
   inspectionsByTeam: new Map(),
+  categories: [],
   activeTab: "jobs",
   selectedTeamId: null,
   selectedProjectId: null,
@@ -30,6 +34,8 @@ const state = {
   workOrders: [],
   groups: [],
   supplies: [],
+  supplyCategoryId: "",
+  supplyQuery: "",
   loading: false,
 };
 
@@ -230,21 +236,39 @@ async function prefetchTeamExtras(teamId) {
 async function onProjectChange(projectId) {
   state.selectedProjectId = projectId;
   state.selectedItemId = null;
+  state.supplyCategoryId = "";
+  state.supplyQuery = "";
+  categoryFilter.value = "";
+  supplySearch.value = "";
   clearBanner();
   setLoading(true);
   listHost.innerHTML = `<p class="loading">Loading project data…</p>`;
   detailHost.innerHTML = `<p class="detail-empty">Select a row to inspect it.</p>`;
   detailMeta.textContent = "";
 
+  const teamQ = state.selectedTeamId
+    ? `?team_id=${encodeURIComponent(state.selectedTeamId)}`
+    : "";
+
   try {
-    const [workOrders, groups, supplies] = await Promise.all([
+    const [workOrders, groups, supplyPayload] = await Promise.all([
       api(`/api/projects/${encodeURIComponent(projectId)}/work_orders`),
       api(`/api/projects/${encodeURIComponent(projectId)}/groups`).catch(() => []),
-      api(`/api/projects/${encodeURIComponent(projectId)}/owner_supplies`).catch(() => []),
+      api(`/api/projects/${encodeURIComponent(projectId)}/owner_supplies${teamQ}`).catch(() => ({
+        items: [],
+        categories: [],
+      })),
     ]);
     state.workOrders = Array.isArray(workOrders) ? workOrders : [];
     state.groups = Array.isArray(groups) ? groups : [];
-    state.supplies = Array.isArray(supplies) ? supplies : [];
+    if (Array.isArray(supplyPayload)) {
+      state.supplies = supplyPayload;
+      state.categories = [];
+    } else {
+      state.supplies = Array.isArray(supplyPayload?.items) ? supplyPayload.items : [];
+      state.categories = Array.isArray(supplyPayload?.categories) ? supplyPayload.categories : [];
+    }
+    fillCategoryFilter();
     renderList();
   } catch (err) {
     showBanner(`Project load failed: ${err.message}`);
@@ -254,13 +278,74 @@ async function onProjectChange(projectId) {
   }
 }
 
+function fillCategoryFilter() {
+  const opts = [`<option value="">All categories</option>`];
+  for (const c of state.categories) {
+    opts.push(
+      `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.title || c.id)}</option>`
+    );
+  }
+  // Also include category ids present on supplies but missing from team list
+  const known = new Set(state.categories.map((c) => String(c.id)));
+  for (const s of state.supplies) {
+    if (s.category_id && !known.has(String(s.category_id))) {
+      known.add(String(s.category_id));
+      opts.push(
+        `<option value="${escapeHtml(s.category_id)}">${escapeHtml(
+          s.category_name || s.category_id
+        )}</option>`
+      );
+    }
+  }
+  categoryFilter.innerHTML = opts.join("");
+}
+
+function formatMoney(cents, currency) {
+  if (cents == null || cents === "") return "—";
+  const n = Number(cents) / 100;
+  if (Number.isNaN(n)) return String(cents);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: currency ? "currency" : "decimal",
+      currency: currency || undefined,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${n.toFixed(2)}${currency ? ` ${currency}` : ""}`;
+  }
+}
+
 function currentList() {
   const teamId = state.selectedTeamId;
   switch (state.activeTab) {
     case "groups":
       return state.groups;
-    case "supplies":
-      return state.supplies;
+    case "supplies": {
+      let items = state.supplies;
+      if (state.supplyCategoryId) {
+        items = items.filter((s) => String(s.category_id) === String(state.supplyCategoryId));
+      }
+      const q = state.supplyQuery.trim().toLowerCase();
+      if (q) {
+        items = items.filter((s) => {
+          const hay = [
+            s.name,
+            s.description,
+            s.po_number,
+            s.supplier,
+            s.location,
+            s.equipment,
+            s.account_reference,
+            s.category_name,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return hay.includes(q);
+        });
+      }
+      return items;
+    }
     case "ships":
       return state.shipsByTeam.get(teamId) || [];
     case "inspections":
@@ -271,7 +356,12 @@ function currentList() {
   }
 }
 
+function updateSupplyFilterVisibility() {
+  supplyFilters.hidden = state.activeTab !== "supplies";
+}
+
 function renderList() {
+  updateSupplyFilterVisibility();
   const items = currentList();
   const labels = {
     jobs: "work orders",
@@ -280,10 +370,22 @@ function renderList() {
     ships: "ships",
     inspections: "inspections",
   };
-  jobsMeta.textContent = `${items.length} ${labels[state.activeTab] || "items"}`;
+  const totalHint =
+    state.activeTab === "supplies" && items.length !== state.supplies.length
+      ? `${items.length} of ${state.supplies.length} owner supplies`
+      : `${items.length} ${labels[state.activeTab] || "items"}`;
+  jobsMeta.textContent = totalHint;
 
   if (!items.length) {
-    listHost.innerHTML = `<p class="empty">Nothing here for this selection.</p>`;
+    const emptyMsg =
+      state.activeTab === "supplies"
+        ? state.supplies.length
+          ? "No owner supplies match this category/search."
+          : "No owner supplies on this project."
+        : state.activeTab === "jobs"
+          ? "No work orders on this project."
+          : "Nothing here for this selection.";
+    listHost.innerHTML = `<p class="empty">${emptyMsg}</p>`;
     return;
   }
 
@@ -314,9 +416,14 @@ function renderList() {
         </button>`;
       }
       if (state.activeTab === "supplies") {
+        const cost = formatMoney(item.cost_cents, item.cost_currency);
         return `<button type="button" class="list-item${active}" data-id="${escapeHtml(item.id)}" style="animation-delay:${delay}ms">
           <span class="title">${escapeHtml(item.name || item.description || "Supply")}</span>
-          <span class="sub">${escapeHtml(item.category_name || item.status || item.id)}</span>
+          <span class="sub">${escapeHtml(item.category_name || "Uncategorized")}${item.supplier ? ` · ${escapeHtml(item.supplier)}` : ""}${item.po_number ? ` · PO ${escapeHtml(item.po_number)}` : ""}</span>
+          <span class="row-meta">
+            <span class="pill">${escapeHtml(item.status != null ? `Status ${item.status}` : "—")}</span>
+            <span>${escapeHtml(cost)}</span>
+          </span>
         </button>`;
       }
       return `<button type="button" class="list-item${active}" data-id="${escapeHtml(item.id)}" style="animation-delay:${delay}ms">
@@ -330,7 +437,6 @@ function renderList() {
   listHost.querySelectorAll(".list-item").forEach((btn) => {
     btn.addEventListener("click", () => selectItem(btn.getAttribute("data-id")));
   });
-  // Kick progress bar widths after paint
   requestAnimationFrame(() => {
     listHost.querySelectorAll(".progress-fill").forEach((el) => {
       const w = el.style.width;
@@ -370,7 +476,56 @@ async function selectItem(id) {
         ["Ref", data.external_reference],
         ["Updated", fmtDate(data.updated_at)]
       );
-      // Optional extras
+
+      let costBlock = "";
+      try {
+        const costPayload = await api(
+          `/api/work_orders/${encodeURIComponent(id)}/cost_items`
+        );
+        data = { ...data, cost_items_payload: costPayload };
+        const lines = Array.isArray(costPayload?.items) ? costPayload.items : [];
+        if (costPayload?.available && lines.length) {
+          costBlock = `
+            <p class="section-label">Cost / estimation lines</p>
+            <table class="mini-table">
+              <thead><tr><th>Name</th><th>Qty</th><th>Unit</th><th>Amount</th></tr></thead>
+              <tbody>
+                ${lines
+                  .map((row) => {
+                    const name = row.name || row.description || row.title || row.id || "Line";
+                    const qty = row.quantity ?? row.qty ?? "—";
+                    const unit = row.unit || row.uom || "";
+                    const amount =
+                      row.amount != null
+                        ? row.amount
+                        : row.cost_cents != null
+                          ? formatMoney(row.cost_cents, row.cost_currency || row.currency)
+                          : row.total ?? row.price ?? "—";
+                    return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(qty)}</td><td>${escapeHtml(unit)}</td><td>${escapeHtml(amount)}</td></tr>`;
+                  })
+                  .join("")}
+              </tbody>
+            </table>
+            ${
+              costPayload.note
+                ? `<p class="note-soft">${escapeHtml(costPayload.note)}</p>`
+                : ""
+            }`;
+        } else {
+          costBlock = `
+            <p class="section-label">Cost / estimation lines</p>
+            <p class="note-soft">${escapeHtml(
+              costPayload?.note ||
+                "No cost items available for this work order via the Integration Hub REST API."
+            )}</p>
+            <p class="note-soft">Work order qty/unit above is the job estimate summary when present.</p>`;
+        }
+      } catch (err) {
+        costBlock = `
+          <p class="section-label">Cost / estimation lines</p>
+          <p class="note-soft">${escapeHtml(err.message)}</p>`;
+      }
+
       try {
         const report = await api(
           `/api/work_orders/${encodeURIComponent(id)}/work_done_report`
@@ -380,6 +535,20 @@ async function selectItem(id) {
       } catch {
         /* optional */
       }
+
+      try {
+        const links = await api(
+          `/api/work_orders/${encodeURIComponent(id)}/owner_supplies`
+        );
+        if (Array.isArray(links) && links.length) {
+          kv.push(["Owner supplies linked", String(links.length)]);
+          data = { ...data, owner_supplies_work_orders: links };
+        }
+      } catch {
+        /* optional */
+      }
+
+      data._costBlock = costBlock;
     } else if (state.activeTab === "ships") {
       data = await api(`/api/ships/${encodeURIComponent(id)}`);
       title = data.name || data.ship_name || "Ship";
@@ -412,8 +581,24 @@ async function selectItem(id) {
       } catch {
         data = state.supplies.find((s) => s.id === id) || { id };
       }
+      // Prefer enriched list fields when detail is sparse
+      const fromList = state.supplies.find((s) => s.id === id) || {};
+      data = { ...fromList, ...data };
       title = data.name || data.description || "Owner supply";
-      kv.push(["Status", data.status], ["Category", data.category_name]);
+      lede = data.description && data.description !== data.name ? data.description : "";
+      kv.push(
+        ["Category", data.category_name || data.category_id],
+        ["Status", data.status],
+        ["Supplier", data.supplier],
+        ["PO", data.po_number],
+        ["Account ref", data.account_reference],
+        ["Location", data.location],
+        ["Equipment", data.equipment],
+        ["Weight", data.weight_value != null ? `${data.weight_value} ${data.weight_unit || ""}`.trim() : null],
+        ["Cost", formatMoney(data.cost_cents, data.cost_currency)],
+        ["Delivery", fmtDate(data.delivery_date)],
+        ["Updated", fmtDate(data.updated_at)]
+      );
     } else {
       data = { id };
       title = "Item";
@@ -427,14 +612,19 @@ async function selectItem(id) {
       )
       .join("");
 
+    const costBlock = data._costBlock || "";
+    const rawData = { ...data };
+    delete rawData._costBlock;
+
     detailMeta.textContent = id;
     detailHost.innerHTML = `
       <div class="detail-panel">
         <h3>${escapeHtml(title)}</h3>
         ${lede ? `<p class="lede">${escapeHtml(lede)}</p>` : ""}
         ${kvHtml ? `<dl class="kv">${kvHtml}</dl>` : ""}
+        ${costBlock}
         <button type="button" class="btn btn-ghost raw-toggle" id="rawToggle">Show raw JSON</button>
-        <pre class="raw-block" id="rawBlock">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+        <pre class="raw-block" id="rawBlock">${escapeHtml(JSON.stringify(rawData, null, 2))}</pre>
       </div>`;
     document.getElementById("rawToggle").addEventListener("click", () => {
       const block = document.getElementById("rawBlock");
@@ -470,5 +660,16 @@ tabs.addEventListener("click", (e) => {
   state.selectedItemId = null;
   detailHost.innerHTML = `<p class="detail-empty">Select a row to inspect it.</p>`;
   detailMeta.textContent = "";
+  renderList();
+});
+
+categoryFilter.addEventListener("change", () => {
+  state.supplyCategoryId = categoryFilter.value;
+  state.selectedItemId = null;
+  renderList();
+});
+
+supplySearch.addEventListener("input", () => {
+  state.supplyQuery = supplySearch.value;
   renderList();
 });

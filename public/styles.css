@@ -235,23 +235,82 @@ body {
   margin-bottom: 0.4rem;
 }
 
-.field select {
+.field select,
+.field input {
   width: 100%;
   appearance: none;
-  background: var(--bg-elevated)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' stroke='%238f8b84' stroke-width='1.5'/%3E%3C/svg%3E")
-    right 0.9rem center / 12px no-repeat;
+  background: var(--bg-elevated);
   color: var(--ink);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  padding: 0.7rem 2.2rem 0.7rem 0.9rem;
+  padding: 0.7rem 0.9rem;
   font: inherit;
   font-size: 0.95rem;
 }
 
-.field select:focus {
+.field select {
+  padding-right: 2.2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' stroke='%238f8b84' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 12px;
+}
+
+.field select:focus,
+.field input:focus {
   outline: 1px solid var(--accent);
   outline-offset: 1px;
+}
+
+.list-filters {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+  margin-bottom: 0.85rem;
+}
+
+@media (min-width: 560px) {
+  .list-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+}
+
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.mini-table th,
+.mini-table td {
+  text-align: left;
+  padding: 0.45rem 0.35rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.mini-table th {
+  color: var(--faint);
+  font-weight: 520;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.section-label {
+  margin: 1.1rem 0 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.note-soft {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  margin: 0.35rem 0 1rem;
 }
 
 .me-chip {
