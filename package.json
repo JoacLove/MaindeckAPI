@@ -2,7 +2,7 @@
   "name": "maindeck-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Minimal Maindeck client-credentials OAuth + REST helper",
+  "description": "Maindeck client-credentials OAuth + dark REST browser",
   "type": "module",
   "main": "server.js",
   "scripts": {
