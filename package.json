@@ -1,0 +1,17 @@
+{
+  "name": "maindeck-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Maindeck client-credentials OAuth + REST helper",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "me": "node cli.js me",
+    "teams": "node cli.js teams",
+    "projects": "node cli.js projects"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

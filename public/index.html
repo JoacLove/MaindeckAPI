@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maindeck API helper</title>
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: #1a222c;
+        --ink: #e8eef4;
+        --muted: #9aa8b5;
+        --accent: #3d9cf0;
+        --warn: #e8a54b;
+        --err: #e86a5c;
+        --ok: #5cbc8a;
+        --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font);
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
+          radial-gradient(900px 500px at 100% 0%, #243528 0%, transparent 50%),
+          var(--bg);
+      }
+      main {
+        max-width: 52rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      h1 {
+        font-size: clamp(1.75rem, 4vw, 2.35rem);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 0 0 0.35rem;
+      }
+      .lede {
+        color: var(--muted);
+        margin: 0 0 1.75rem;
+        line-height: 1.5;
+        max-width: 36rem;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-bottom: 1.25rem;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        border: 1px solid #2c3a48;
+        background: var(--panel);
+        color: var(--ink);
+        padding: 0.55rem 0.95rem;
+        border-radius: 0.4rem;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      .status {
+        font-size: 0.9rem;
+        color: var(--muted);
+        margin-bottom: 0.75rem;
+        min-height: 1.25rem;
+      }
+      .status.ok {
+        color: var(--ok);
+      }
+      .status.warn {
+        color: var(--warn);
+      }
+      .status.err {
+        color: var(--err);
+      }
+      pre {
+        margin: 0;
+        padding: 1rem 1.1rem;
+        background: var(--panel);
+        border: 1px solid #2c3a48;
+        border-radius: 0.5rem;
+        overflow: auto;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        max-height: 60vh;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .meta {
+        margin-top: 1.5rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Maindeck API</h1>
+      <p class="lede">
+        Client-credentials OAuth against production, then REST with a Bearer token.
+        Secrets stay in <code>MAINDECK_CLIENT_ID</code> /
+        <code>MAINDECK_CLIENT_SECRET</code>.
+      </p>
+      <div class="actions">
+        <button type="button" data-path="/api/me">GET /api/me</button>
+        <button type="button" data-path="/api/teams">GET /api/teams</button>
+        <button type="button" data-path="/api/projects">GET /api/projects</button>
+        <button type="button" data-path="/health">GET /health</button>
+      </div>
+      <div id="status" class="status" aria-live="polite"></div>
+      <pre id="out">Select a route to call Maindeck.</pre>
+      <p class="meta">
+        Token URL <code>https://app.maindeck.io/oauth/token</code> ·
+        grant <code>client_credentials</code> · scope <code>read</code> ·
+        tokens typically expire in <code>7200</code> seconds.
+      </p>
+    </main>
+    <script>
+      const statusEl = document.getElementById("status");
+      const outEl = document.getElementById("out");
+      const buttons = document.querySelectorAll("button[data-path]");
+
+      async function call(path) {
+        statusEl.className = "status";
+        statusEl.textContent = "Loading " + path + "…";
+        buttons.forEach((b) => (b.disabled = true));
+        try {
+          const res = await fetch(path, { headers: { Accept: "application/json" } });
+          const text = await res.text();
+          let body;
+          try {
+            body = JSON.parse(text);
+          } catch {
+            body = text;
+          }
+          outEl.textContent =
+            typeof body === "string" ? body : JSON.stringify(body, null, 2);
+          if (!res.ok) {
+            statusEl.className = "status err";
+            statusEl.textContent =
+              res.status +
+              (body && body.message ? " — " + body.message : " — request failed");
+          } else if (body && body.configured === false) {
+            statusEl.className = "status warn";
+            statusEl.textContent = "Server up; credentials not configured yet";
+          } else {
+            statusEl.className = "status ok";
+            statusEl.textContent = res.status + " OK";
+          }
+        } catch (err) {
+          statusEl.className = "status err";
+          statusEl.textContent = err.message || String(err);
+          outEl.textContent = String(err);
+        } finally {
+          buttons.forEach((b) => (b.disabled = false));
+        }
+      }
+
+      buttons.forEach((btn) => {
+        btn.addEventListener("click", () => call(btn.getAttribute("data-path")));
+      });
+
+      call("/health");
+    </script>
+  </body>
+</html>
