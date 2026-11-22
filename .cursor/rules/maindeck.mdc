@@ -1,0 +1,30 @@
+---
+description: Maindeck Integration Hub read-only rules for this app
+alwaysApply: true
+---
+
+# Maindeck API rules
+
+Follow `docs/maindeck-cursor-instruks.md` and match `docs/maindeck-ui-prototype.html`.
+
+## Hard rules
+
+1. **GET only** against Maindeck `/api/v1`. OAuth scope is `read`. No POST/PUT/PATCH/DELETE to Maindeck.
+2. **Secrets server-side only.** `MAINDECK_CLIENT_ID` / `MAINDECK_CLIENT_SECRET` from env. Never in frontend, git, logs, or client error bodies.
+3. **Frontend talks only to our proxy**, never directly to `app.maindeck.io`.
+4. **Proxy allowlist** first path segment: `me`, `teams`, `projects`, `groups`, `ships`, `work_orders`, `owner_supplies`, `owner_supply_categories`, `owner_supplies_work_orders`, `inspections`, `inspection_templates`. Reject `..` and absolute URLs.
+5. **Do not invent fields or endpoints.** If not in the instruks, fetch once, inspect raw JSON, then build UI.
+6. **UI language: English.** Dates like `5 Nov 2026`, numbers en-GB (`2,002,147 USD`).
+
+## Verified auth
+
+- Base: `https://app.maindeck.io` (override with `MAINDECK_BASE_URL`)
+- `POST {BASE}/oauth/token`, `grant_type=client_credentials`, `scope=read`
+- Try JSON body first; on `invalid_client` try Basic auth then form body
+- Cache token until `expires_in − 300s`; on API 401 clear cache and retry once
+
+## Verified reads
+
+`me`, `teams`, `teams/{id}/projects`, `projects/{id}`, `owner_supplies`, `work_orders`, `groups`, `owners`, `teams/{id}/owner_supply_categories`
+
+Budget/economy comes from Excel export, not the API.

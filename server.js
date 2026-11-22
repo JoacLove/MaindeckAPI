@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Local / publish-app HTTP server for Maindeck API browser.
- * Secrets stay in env (Cursor Secrets); never printed.
+ * Maindeck Reader server — allowlisted GET proxy + static UI.
+ * Secrets stay in env; never printed.
  */
 
 import http from "node:http";
@@ -33,36 +33,18 @@ function handleError(res, err) {
       ok: false,
       error: "config_missing",
       message: err.message,
-      secrets: ["MAINDECK_CLIENT_ID", "MAINDECK_CLIENT_SECRET"],
-      token_url: md.constants.TOKEN_URL,
-      token_expires_in_sec: md.constants.TOKEN_EXPIRES_HINT_SEC,
     });
   }
   if (err instanceof md.MaindeckApiError) {
-    const code =
-      err.body?.error === "invalid_id" || err.body?.error === "invalid_path"
-        ? err.body.error
-        : "maindeck_api";
     return sendJson(res, err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 502, {
       ok: false,
-      error: code,
+      error: err.body?.error || "maindeck_api",
       message: err.message,
-      details:
-        err.body && typeof err.body === "object"
-          ? {
-              error: err.body.error,
-              error_description: err.body.error_description,
-              message: err.body.message,
-            }
-          : undefined,
+      status: err.statusCode,
     });
   }
   console.error("Unhandled error:", err?.message || err);
   return sendJson(res, 500, { ok: false, error: "internal", message: "Unexpected server error" });
-}
-
-async function ok(res, data) {
-  return sendJson(res, 200, { ok: true, data });
 }
 
 function contentTypeFor(filePath) {
@@ -76,12 +58,11 @@ function contentTypeFor(filePath) {
       ".svg": "image/svg+xml",
       ".ico": "image/x-icon",
       ".png": "image/png",
-      ".woff2": "font/woff2",
     }[ext] || "application/octet-stream"
   );
 }
 
-function serveStatic(req, res, urlPath) {
+function serveStatic(res, urlPath) {
   const safe = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(PUBLIC_DIR, safe === "/" || safe === "" ? "index.html" : safe);
   if (!filePath.startsWith(PUBLIC_DIR)) return sendText(res, 403, "Forbidden");
@@ -91,15 +72,20 @@ function serveStatic(req, res, urlPath) {
   });
 }
 
-/** Match /api/... patterns and dispatch. Returns true if handled. */
-async function handleApi(req, res, pathname, searchParams) {
-  if (req.method !== "GET") {
-    sendJson(res, 405, { ok: false, error: "method_not_allowed" });
-    return true;
-  }
+async function readJson(req) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw) return {};
+  return JSON.parse(raw);
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  const { pathname } = url;
 
   try {
-    if (pathname === "/api/health" || pathname === "/health") {
+    if (pathname === "/health" || pathname === "/api/health") {
       let configured = false;
       try {
         md.requireCredentials();
@@ -107,211 +93,84 @@ async function handleApi(req, res, pathname, searchParams) {
       } catch {
         configured = false;
       }
-      sendJson(res, 200, {
+      return sendJson(res, 200, {
         ok: true,
         service: "maindeck-api",
         configured,
-        token_url: md.constants.TOKEN_URL,
-        api_base: md.constants.API_BASE,
-        token_expires_in_sec: md.constants.TOKEN_EXPIRES_HINT_SEC,
+        base: md.baseUrl(),
+        allowlist: md.constants.ALLOWED_ROOTS,
       });
-      return true;
     }
 
-    if (pathname === "/api/me") {
-      await ok(res, await md.getMe());
-      return true;
+    if (pathname === "/api/rates" && req.method === "GET") {
+      const rates = await md.getUsdRates();
+      return sendJson(res, 200, {
+        ok: true,
+        data: {
+          base: rates.base,
+          rates: rates.rates,
+          asOf: rates.asOf,
+          source: rates.source,
+        },
+      });
     }
 
-    if (pathname === "/api/teams") {
-      await ok(res, await md.listTeams());
-      return true;
-    }
-
-    if (pathname === "/api/projects") {
-      await ok(res, await md.listAllProjects());
-      return true;
-    }
-
-    /** Decode + validate a path id (blocks SSRF / traversal). */
-    function idAt(raw) {
-      return md.assertSafeId(decodeURIComponent(raw));
-    }
-
-    let m;
-
-    m = pathname.match(/^\/api\/teams\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getTeam(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/teams\/([^/]+)\/projects$/);
-    if (m) {
-      await ok(res, await md.listTeamProjects(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/teams\/([^/]+)\/ships$/);
-    if (m) {
-      await ok(res, await md.listTeamShips(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/teams\/([^/]+)\/inspections$/);
-    if (m) {
-      await ok(res, await md.listTeamInspections(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/teams\/([^/]+)\/inspection_templates$/);
-    if (m) {
-      await ok(res, await md.listTeamInspectionTemplates(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/teams\/([^/]+)\/offices$/);
-    if (m) {
-      await ok(res, await md.listTeamOffices(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/teams\/([^/]+)\/owner_supply_categories$/);
-    if (m) {
-      await ok(res, await md.listTeamOwnerSupplyCategories(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/projects\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getProject(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/projects\/([^/]+)\/work_orders$/);
-    if (m) {
-      await ok(res, await md.listProjectWorkOrders(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/projects\/([^/]+)\/groups$/);
-    if (m) {
-      await ok(res, await md.listProjectGroups(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/projects\/([^/]+)\/owners$/);
-    if (m) {
-      await ok(res, await md.listProjectOwners(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/projects\/([^/]+)\/owner_supplies$/);
-    if (m) {
-      const projectId = idAt(m[1]);
-      const teamId = searchParams.get("team_id");
-      if (teamId) {
-        await ok(res, await md.listProjectOwnerSuppliesEnriched(projectId, idAt(teamId)));
-      } else {
-        const items = await md.listProjectOwnerSupplies(projectId);
-        await ok(res, { items, categories: [] });
+    // Unified allowlisted proxy (GET-only to Maindeck)
+    if (pathname === "/api/proxy") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { ok: false, error: "method_not_allowed", message: "Use POST" });
       }
-      return true;
+      const input = await readJson(req);
+      const pathStr = input.path;
+      const params = input.params && typeof input.params === "object" ? input.params : {};
+      const all = Boolean(input.all);
+      md.assertAllowedPath(pathStr);
+      const result = all
+        ? await md.apiGetAll(pathStr, params)
+        : await md.apiGet(pathStr, params);
+      return sendJson(res, 200, {
+        ok: true,
+        status: result.status,
+        body: result.body,
+        url: result.url,
+      });
     }
 
-    m = pathname.match(/^\/api\/work_orders\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getWorkOrder(idAt(m[1])));
-      return true;
+    // Convenience GETs used by the UI (still allowlisted server-side)
+    if (req.method === "GET" && pathname === "/api/me") {
+      const result = await md.apiGet("me");
+      return sendJson(res, 200, { ok: true, data: md.unwrapResources(result.body)[0] || result.body });
     }
 
-    m = pathname.match(/^\/api\/work_orders\/([^/]+)\/work_done_report$/);
-    if (m) {
-      await ok(res, await md.getWorkDoneReport(idAt(m[1])));
-      return true;
+    if (req.method === "GET" && pathname === "/api/teams") {
+      const result = await md.apiGetAll("teams");
+      return sendJson(res, 200, { ok: true, data: md.unwrapResources(result.body), truncated: result.body.truncated });
     }
 
-    m = pathname.match(/^\/api\/work_orders\/([^/]+)\/owner_supplies$/);
-    if (m) {
-      await ok(res, await md.listWorkOrderOwnerSupplies(idAt(m[1])));
-      return true;
+    if (req.method === "GET" && pathname.startsWith("/api/")) {
+      return sendJson(res, 404, {
+        ok: false,
+        error: "not_found",
+        message: "Use POST /api/proxy with { path, params?, all? }",
+      });
     }
 
-    m = pathname.match(/^\/api\/work_orders\/([^/]+)\/cost_items$/);
-    if (m) {
-      await ok(res, await md.listWorkOrderCostItems(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/ships\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getShip(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/groups\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getGroup(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/inspections\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getInspection(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/inspections\/([^/]+)\/items$/);
-    if (m) {
-      await ok(res, await md.listInspectionItems(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/inspection_templates\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getInspectionTemplate(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/owner_supplies\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getOwnerSupply(idAt(m[1])));
-      return true;
-    }
-
-    m = pathname.match(/^\/api\/owner_supply_categories\/([^/]+)$/);
-    if (m) {
-      await ok(res, await md.getOwnerSupplyCategory(idAt(m[1])));
-      return true;
-    }
-
-    return false;
+    if (req.method === "GET") return serveStatic(res, pathname);
+    return sendJson(res, 405, { ok: false, error: "method_not_allowed" });
   } catch (err) {
-    handleError(res, err);
-    return true;
+    if (err instanceof SyntaxError) {
+      return sendJson(res, 400, { ok: false, error: "bad_json", message: "Invalid JSON body" });
+    }
+    return handleError(res, err);
   }
-}
-
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
-  const { pathname } = url;
-
-  if (pathname.startsWith("/api/") || pathname === "/health") {
-    const handled = await handleApi(req, res, pathname, url.searchParams);
-    if (handled) return;
-    return sendJson(res, 404, { ok: false, error: "not_found" });
-  }
-
-  if (req.method === "GET") return serveStatic(req, res, pathname);
-  sendJson(res, 405, { ok: false, error: "method_not_allowed" });
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Maindeck API browser listening on http://127.0.0.1:${PORT}`);
+  console.log(`Maindeck Reader listening on http://127.0.0.1:${PORT}`);
   try {
     md.requireCredentials();
-    console.log("Credentials: MAINDECK_CLIENT_ID / MAINDECK_CLIENT_SECRET are set");
+    console.log("Credentials: configured");
   } catch {
-    console.log("Credentials: not set — /api/* returns a clear config error until secrets are bound");
+    console.log("Credentials: not set — API returns config_missing until secrets are bound");
   }
 });

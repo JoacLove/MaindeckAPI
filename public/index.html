@@ -1,107 +1,125 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Maindeck</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@360;450;520;560&family=Syne:wght@560;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <div class="atmosphere" aria-hidden="true"></div>
-    <div class="app">
-      <header class="hero" id="hero">
-        <p class="brand">Maindeck</p>
-        <div class="hero-copy">
-          <h1>Projects and jobs, live from production.</h1>
-          <p>
-            Browse teams, projects, jobs, owner supply, and estimation lines
-            your credentials can reach — one dark workspace.
-          </p>
-          <div class="cta-row">
-            <button type="button" class="btn btn-primary" id="openBtn">
-              Open workspace
-            </button>
-            <button type="button" class="btn btn-ghost" id="reloadBtn" hidden>
-              Refresh data
-            </button>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maindeck Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app">
+  <nav class="rail">
+    <div class="logo">M</div>
+    <button class="on" data-go="fleet" title="Fleet dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Fleet</button>
+    <button data-go="project" title="Project" id="navProject" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h12M3 17h8"/></svg>Project</button>
+    <button title="Export" id="btnExport" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16"/></svg>Export</button>
+    <div class="grow"></div>
+    <button title="Settings: currency, team" id="btnSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+  </nav>
+
+  <div class="main">
+    <header class="top">
+      <div class="crumb" id="crumb"></div>
+      <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5F7193" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="gsearch" placeholder="Search projects, vessels, POs…"><kbd>/</kbd></label>
+      <span class="pill" id="connPill"><span class="dot" id="connDot" style="background:var(--warn)"></span><span id="connLabel">Connecting…</span></span>
+      <span class="pill num" id="fxPill">USD</span>
+      <select id="teamSelect" class="btn" style="height:36px;max-width:180px" title="Team"></select>
+    </header>
+
+    <div class="content">
+      <div id="banner" class="card" style="display:none;margin-bottom:16px;border-color:var(--danger);color:var(--danger)"></div>
+
+      <section class="view on" id="v-fleet">
+        <div class="hero">
+          <div>
+            <h1 id="fleetTitle">Fleet projects</h1>
+            <div class="sub" id="fleetSub">Loading from Maindeck…</div>
+          </div>
+          <div class="actions">
+            <div class="seg" id="phaseFilter"><button class="on" data-f="active">Active</button><button data-f="all">All</button></div>
+            <button class="btn" id="btnRefresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>Refresh</button>
+            <button class="btn primary" id="btnPresent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg>Present</button>
           </div>
         </div>
-      </header>
+        <div class="grid kpis" id="fleetKpis"></div>
+        <div class="grid two" style="margin-top:16px">
+          <div class="card"><h3>Fleet timeline <span class="r">bars coloured by phase · red line = today</span></h3><div class="tl" id="timeline"></div></div>
+          <div class="card"><h3>Projects per phase</h3><div class="phasebar" id="phasebar"></div><div class="legend" id="phaseLegend"></div>
+            <h3 style="margin-top:22px">Starting next</h3><ul class="fu" id="upcoming"></ul></div>
+        </div>
+        <h3 class="muted" style="margin:26px 0 12px;font-size:13px">All projects</h3>
+        <div class="grid board" id="board"></div>
+      </section>
 
-      <main class="workspace" id="workspace" hidden>
-        <div class="banner" id="banner" role="alert"></div>
+      <section class="view" id="v-project">
+        <div class="hero">
+          <div>
+            <div class="muted" style="font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase" id="pShip"></div>
+            <h1 id="pName"></h1>
+            <div class="sub" id="pSub"></div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="btnCsv">CSV</button>
+            <a class="btn" id="btnOpenMd" href="#" target="_blank" rel="noopener">Open in Maindeck ↗</a>
+          </div>
+        </div>
+        <div class="stepper" id="pStepper" style="margin-bottom:18px"></div>
+        <div class="tabs" id="ptabs"></div>
 
-        <div class="toolbar">
-          <div class="field">
-            <label for="teamSelect">Team</label>
-            <select id="teamSelect" disabled>
-              <option value="">Loading teams…</option>
-            </select>
+        <div class="ptab" data-t="overview">
+          <div class="grid kpis" id="pKpis"></div>
+          <div class="grid two" style="margin-top:16px">
+            <div class="card"><h3>Owner supplies by status <span class="r" id="osTotal"></span></h3><div class="stack" id="osStack"></div><div class="legend" id="osLegend" style="margin-top:10px"></div>
+              <h3 style="margin-top:22px">Cost per supplier</h3><div id="supBars"></div></div>
+            <div class="card"><h3>Follow-up</h3><ul class="fu" id="followup"></ul></div>
           </div>
-          <div class="field">
-            <label for="projectSelect">Project</label>
-            <select id="projectSelect" disabled>
-              <option value="">Select a team first</option>
-            </select>
-          </div>
-          <div class="me-chip" id="meChip">Signed in via API credentials</div>
         </div>
 
-        <div class="layout">
-          <section aria-labelledby="jobsHeading">
-            <div class="panel-head">
-              <h2 id="jobsHeading">Browse</h2>
-              <span class="meta" id="jobsMeta">Pick a project</span>
-            </div>
-            <div class="tabs" id="resourceTabs" role="tablist">
-              <button type="button" class="tab active" data-tab="jobs">Jobs</button>
-              <button type="button" class="tab" data-tab="supplies">Owner supply</button>
-              <button type="button" class="tab" data-tab="groups">Groups</button>
-              <button type="button" class="tab" data-tab="ships">Ships</button>
-              <button type="button" class="tab" data-tab="inspections">Inspections</button>
-            </div>
-            <div class="list-filters" id="supplyFilters" hidden>
-              <div class="field">
-                <label for="categoryFilter">Category</label>
-                <select id="categoryFilter">
-                  <option value="">All categories</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="supplySearch">Search</label>
-                <input id="supplySearch" type="search" placeholder="Name, PO, supplier…" />
-              </div>
-            </div>
-            <div id="listHost">
-              <p class="empty">Select a project to load work orders.</p>
-            </div>
-          </section>
-
-          <section aria-labelledby="detailHeading">
-            <div class="panel-head">
-              <h2 id="detailHeading">Detail</h2>
-              <span class="meta" id="detailMeta"></span>
-            </div>
-            <div class="detail" id="detailHost">
-              <p class="detail-empty">Select a row to inspect it.</p>
-            </div>
-          </section>
+        <div class="ptab hidden" data-t="supplies">
+          <div class="tbar">
+            <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5F7193" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="osSearch" placeholder="Filter supplies…"></label>
+            <div class="seg" id="osSeg"></div>
+            <button class="btn" id="btnOsCsv" style="margin-left:auto">CSV</button>
+          </div>
+          <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th data-sort="name">Supply</th><th data-sort="po">PO</th><th data-sort="supplier">Supplier</th><th data-sort="status">Status</th><th data-sort="delivery">Delivery</th><th class="r" data-sort="usd">Cost (USD)</th></tr></thead><tbody id="osBody"></tbody></table></div>
+          <p class="dim" id="fxNote" style="font-size:12px;margin-top:10px"></p>
         </div>
 
-        <p class="footer-note">
-          Server-side OAuth against
-          <code>https://app.maindeck.io/oauth/token</code>
-          (client credentials, scope <code>read</code>, tokens ~7200s). Secrets
-          never leave the server.
-        </p>
-      </main>
+        <div class="ptab hidden" data-t="workorders">
+          <div class="card gantt" id="gantt"></div>
+          <div class="legend" style="margin-top:10px"><span><i style="background:var(--accent-2)"></i>Completed</span><span><i style="background:var(--accent)"></i>In progress</span><span><i style="background:#5F7193"></i>Not started</span><span><i style="background:var(--danger)"></i>Today</span><span>Filled part = progress</span></div>
+        </div>
+
+        <div class="ptab hidden" data-t="groups">
+          <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Group</th><th>ID</th></tr></thead><tbody id="groupsBody"></tbody></table></div>
+        </div>
+
+        <div class="ptab hidden" data-t="owners">
+          <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Owner</th><th>ID</th></tr></thead><tbody id="ownersBody"></tbody></table></div>
+        </div>
+
+        <div class="ptab hidden" data-t="economy">
+          <div class="tbar">
+            <label class="btn" style="cursor:pointer">Import Excel<input type="file" id="xlsxInput" accept=".xlsx" hidden></label>
+            <span class="muted" id="econFile" style="font-size:12px">Maindeck: Budgeting and cost → Export → Billed and actual amounts</span>
+          </div>
+          <div class="grid kpis" id="eKpis"></div>
+          <div class="card" style="margin-top:16px"><h3>Estimate vs committed per group <span class="r">from Excel export</span></h3><div id="econBars"></div></div>
+        </div>
+
+        <div class="ptab hidden" data-t="raw">
+          <div class="card"><pre id="rawJson" style="white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--muted);max-height:60vh;overflow:auto"></pre></div>
+        </div>
+      </section>
     </div>
-    <script type="module" src="/app.js"></script>
-  </body>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer"><header><button class="x" id="dx">✕</button><span id="dTag"></span><h2 id="dTitle"></h2><div class="muted" id="dSub"></div></header><div class="body" id="dBody"></div></aside>
+
+<script src="https://cdn.jsdelivr.net/npm/read-excel-file@5.8.7/bundle/read-excel-file.min.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
 </html>

@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maindeck Reader – UI prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  UI REFERENCE FOR CURSOR — not production code.
+  Static demo data only. Real data comes from the Maindeck proxy (see maindeck-cursor-instruks.md).
+  Copy the tokens, layout and component patterns; build them as React components.
+-->
+<style>
+:root{
+  --bg:#0B1220; --surface:#111A2C; --surface-2:#16223A; --line:#22314F; --line-2:#2C3D61;
+  --text:#E6EDF7; --muted:#8A9BB8; --dim:#5F7193;
+  --accent:#4C9AFF; --accent-2:#2ED39A; --warn:#F5B83D; --danger:#F2577A; --violet:#8B7CF6;
+  --ph-planning:#8B7CF6; --ph-yard:#F5B83D; --ph-kick:#4C9AFF; --ph-exec:#2ED39A; --ph-closing:#F28DB2;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:var(--text)}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .dim{color:var(--dim)}
+
+/* shell */
+.app{display:grid;grid-template-columns:76px 1fr;height:100vh}
+.rail{background:#080E1A;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px}
+.logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#4C9AFF,#2ED39A);display:grid;place-items:center;font-weight:800;color:#06101F;margin-bottom:18px;box-shadow:0 6px 24px #4C9AFF44}
+.rail button{width:52px;height:52px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--dim);font-size:10px;font-weight:600}
+.rail button svg{width:20px;height:20px}
+.rail button:hover{color:var(--text);background:var(--surface)}
+.rail button.on{color:var(--text);background:var(--surface-2);box-shadow:inset 3px 0 0 var(--accent)}
+.rail .grow{flex:1}
+
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.top{height:64px;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid var(--line);background:rgba(11,18,32,.85);backdrop-filter:blur(8px)}
+.crumb{display:flex;align-items:center;gap:8px;font-weight:600}
+.crumb a{color:var(--muted);text-decoration:none;cursor:pointer}.crumb a:hover{color:var(--text)}
+.crumb .sep{color:var(--dim)}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:0 12px;height:38px;width:320px}
+.search input{background:none;border:0;outline:0;flex:1}
+.search kbd{font-size:11px;color:var(--dim);border:1px solid var(--line-2);border-radius:5px;padding:0 5px}
+.pill{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:99px;background:var(--surface);border:1px solid var(--line);font-size:12px;font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent-2);box-shadow:0 0 0 4px #2ED39A22}
+.btn{height:36px;padding:0 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line-2);font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:7px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#06101F}
+.btn svg{width:16px;height:16px}
+.content{flex:1;overflow:auto;padding:24px 28px 40px}
+.demo{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);background:#F5B83D14;border:1px solid #F5B83D40;border-radius:6px;padding:3px 8px}
+
+/* cards */
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.card h3{font-size:13px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.card h3 .r{margin-left:auto;font-weight:500;color:var(--dim)}
+.kpi{position:relative;overflow:hidden}
+.kpi .v{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.kpi .l{color:var(--muted);font-weight:500;margin-top:4px}
+.kpi .s{color:var(--dim);font-size:12px;margin-top:2px}
+.kpi::after{content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;background:var(--glow);opacity:.13}
+.hero{display:flex;align-items:flex-end;gap:24px;margin-bottom:20px}
+.hero h1{font-size:28px;font-weight:800;letter-spacing:-.02em}
+.hero .sub{color:var(--muted);margin-top:4px}
+.hero .actions{margin-left:auto;display:flex;gap:8px}
+
+/* phase bar / stepper */
+.phasebar{display:flex;height:12px;border-radius:99px;overflow:hidden;gap:3px;margin:6px 0 12px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.stepper{display:flex;gap:6px}
+.stepper span{flex:1;text-align:center;font-size:12px;font-weight:600;padding:6px 0;border-radius:99px;border:1px solid var(--line-2);color:var(--dim)}
+.stepper span.past{color:var(--muted);background:var(--surface-2)}
+.stepper span.on{color:#06101F;border-color:transparent}
+
+/* project cards */
+.board{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;cursor:pointer;transition:.15s;position:relative;overflow:hidden}
+.pcard:hover{border-color:var(--line-2);transform:translateY(-2px);box-shadow:0 12px 30px #0006}
+.pcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.pcard .ship{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.pcard .name{font-size:16px;font-weight:700;margin:3px 0 10px}
+.pcard .row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap}
+.prog{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:10px}
+.prog i{display:block;height:100%;border-radius:99px}
+
+/* timeline */
+.tl{position:relative}
+.tl .axis{display:flex;margin-left:170px;position:relative;height:22px;font-size:11px;color:var(--dim)}
+.tl .axis span{position:absolute;transform:translateX(-50%)}
+.tl .lane{display:flex;align-items:center;min-height:36px;border-top:1px solid var(--line)}
+.tl .lane b{width:170px;flex:none;font-weight:600;font-size:13px}
+.tl .track{position:relative;flex:1;height:36px}
+.tl .bar{position:absolute;top:8px;height:20px;border-radius:6px;font-size:11px;font-weight:700;color:#06101F;padding:0 8px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;cursor:pointer}
+.tl .today{position:absolute;top:0;bottom:0;width:2px;background:var(--danger);box-shadow:0 0 12px var(--danger)}
+.tl .grid-l{position:absolute;top:22px;bottom:0;border-left:1px dashed var(--line)}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tabs button{padding:10px 14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:7px}
+.tabs button .n{font-size:11px;background:var(--surface-2);border-radius:99px;padding:1px 7px;color:var(--muted)}
+.tabs button.on{color:var(--text);border-color:var(--accent)}
+
+/* table */
+.tbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.tbar .search{margin-left:0;width:280px;height:36px}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--surface-2);color:var(--text)}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:700;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--muted)}
+td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr{cursor:pointer;transition:background .1s}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr.sel{background:#4C9AFF14;box-shadow:inset 3px 0 0 var(--accent)}
+td.r,th.r{text-align:right}
+.sub{display:block;font-size:12px;color:var(--dim);margin-top:1px}
+.stack{display:flex;height:10px;border-radius:99px;overflow:hidden;gap:2px}
+
+/* gantt */
+.gantt .g-head{white-space:nowrap;display:grid;grid-template-columns:300px 1fr;font-size:11px;color:var(--dim);height:24px;position:relative}
+.gantt .g-row{display:grid;grid-template-columns:300px 1fr;align-items:center;min-height:30px;border-top:1px solid var(--line)}
+.gantt .g-row.grp{background:var(--surface-2);font-weight:700}
+.gantt .lab{display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;min-width:0}
+.gantt .lab .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gantt .lab .p{font-size:12px;color:var(--muted);width:40px;text-align:right}
+.gantt .trk{position:relative;height:30px}
+.gantt .gb{position:absolute;top:9px;height:12px;border-radius:4px;overflow:hidden}
+.gantt .gb i{display:block;height:100%}
+.gantt .nd{position:absolute;left:8px;top:7px;font-size:12px;font-style:italic;color:var(--dim)}
+
+/* drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:420px;background:var(--surface);border-left:1px solid var(--line-2);box-shadow:-20px 0 60px #0008;transform:translateX(100%);transition:transform .22s ease;z-index:20;display:flex;flex-direction:column}
+.drawer.open{transform:none}
+.drawer header{padding:22px 24px 16px;border-bottom:1px solid var(--line)}
+.drawer header .x{float:right;width:32px;height:32px;border-radius:8px;color:var(--muted)}
+.drawer header .x:hover{background:var(--surface-2);color:var(--text)}
+.drawer h2{font-size:18px;font-weight:700;margin:8px 0 2px;padding-right:40px}
+.drawer .body{padding:18px 24px;overflow:auto;flex:1}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:10px 12px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{font-weight:500}
+.big{font-size:28px;font-weight:800;letter-spacing:-.02em}
+
+.two{grid-template-columns:2fr 1fr}
+.hbar{display:grid;grid-template-columns:150px 1fr 90px;gap:10px;align-items:center;font-size:12px;margin:7px 0}
+.hbar .t{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.hbar .t i{display:block;height:100%;border-radius:99px}
+.fu li{list-style:none;display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}
+.fu li:first-child{border-top:0}
+.fu .d{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:none}
+.view{display:none}.view.on{display:block}
+.hidden{display:none!important}
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.search{width:200px}}
+@media (max-width:700px){.app{grid-template-columns:1fr}.rail{display:none}.content{padding:16px}.top{padding:0 16px}.search{display:none}.drawer{width:100%}.gantt .g-head,.gantt .g-row{grid-template-columns:170px 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail">
+    <div class="logo">M</div>
+    <button class="on" data-go="fleet" title="Fleet dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Fleet</button>
+    <button data-go="project" title="Project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h12M3 17h8"/></svg>Project</button>
+    <button title="Export (PowerPoint / PDF)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16"/></svg>Export</button>
+    <div class="grow"></div>
+    <button title="Settings: currency, team"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+  </nav>
+
+  <div class="main">
+    <header class="top">
+      <div class="crumb" id="crumb"></div>
+      <span class="demo">Demo data</span>
+      <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5F7193" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="gsearch" placeholder="Search projects, vessels, POs…"><kbd>/</kbd></label>
+      <span class="pill"><span class="dot"></span>Connected · TGS</span>
+      <span class="pill num">USD · ECB 5 Nov</span>
+    </header>
+
+    <div class="content">
+      <!-- FLEET -->
+      <section class="view on" id="v-fleet">
+        <div class="hero">
+          <div>
+            <h1>Fleet projects · week 45</h1>
+            <div class="sub">Thursday 5 November 2026 · data fetched 14:02</div>
+          </div>
+          <div class="actions">
+            <div class="seg" id="phaseFilter"><button class="on" data-f="active">Active</button><button data-f="all">All</button></div>
+            <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>Refresh</button>
+            <button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg>Present</button>
+          </div>
+        </div>
+        <div class="grid kpis" id="fleetKpis"></div>
+        <div class="grid two" style="margin-top:16px">
+          <div class="card"><h3>Fleet timeline <span class="r">bars coloured by phase · red line = today</span></h3><div class="tl" id="timeline"></div></div>
+          <div class="card"><h3>Projects per phase</h3><div class="phasebar" id="phasebar"></div><div class="legend" id="phaseLegend"></div>
+            <h3 style="margin-top:22px">Starting next</h3><ul class="fu" id="upcoming"></ul></div>
+        </div>
+        <h3 class="muted" style="margin:26px 0 12px;font-size:13px">All projects</h3>
+        <div class="grid board" id="board"></div>
+      </section>
+
+      <!-- PROJECT -->
+      <section class="view" id="v-project">
+        <div class="hero">
+          <div>
+            <div class="muted" style="font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase" id="pShip"></div>
+            <h1 id="pName"></h1>
+            <div class="sub" id="pSub"></div>
+          </div>
+          <div class="actions"><button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16"/></svg>Export</button><button class="btn">Open in Maindeck ↗</button></div>
+        </div>
+        <div class="stepper" id="pStepper" style="margin-bottom:18px"></div>
+        <div class="tabs" id="ptabs"></div>
+
+        <div class="ptab" data-t="overview">
+          <div class="grid kpis" id="pKpis"></div>
+          <div class="grid two" style="margin-top:16px">
+            <div class="card"><h3>Owner supplies by status <span class="r" id="osTotal"></span></h3><div class="stack" id="osStack"></div><div class="legend" id="osLegend" style="margin-top:10px"></div>
+              <h3 style="margin-top:22px">Cost per supplier</h3><div id="supBars"></div></div>
+            <div class="card"><h3>Follow-up</h3><ul class="fu" id="followup"></ul></div>
+          </div>
+        </div>
+
+        <div class="ptab hidden" data-t="supplies">
+          <div class="tbar">
+            <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5F7193" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="osSearch" placeholder="Filter supplies…"></label>
+            <div class="seg" id="osSeg"></div>
+            <button class="btn" style="margin-left:auto">CSV</button>
+          </div>
+          <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Supply</th><th>PO</th><th>Supplier</th><th>Status</th><th>Delivery</th><th class="r">Cost (USD)</th></tr></thead><tbody id="osBody"></tbody></table></div>
+          <p class="dim" style="font-size:12px;margin-top:10px">Converted to USD · ECB rate 2026-11-05 · 1 USD = 10.12 NOK · 0.87 EUR. Original amount below the USD figure.</p>
+        </div>
+
+        <div class="ptab hidden" data-t="workorders">
+          <div class="card gantt" id="gantt"></div>
+          <div class="legend" style="margin-top:10px"><span><i style="background:var(--accent-2)"></i>Completed</span><span><i style="background:var(--accent)"></i>In progress</span><span><i style="background:#5F7193"></i>Not started</span><span><i style="background:var(--danger)"></i>Today</span><span>Filled part = progress</span></div>
+        </div>
+
+        <div class="ptab hidden" data-t="economy">
+          <div class="grid kpis" id="eKpis"></div>
+          <div class="card" style="margin-top:16px"><h3>Estimate vs committed per group <span class="r">from Maindeck export “Billed and actual amounts”</span></h3><div id="econBars"></div></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer"><header><button class="x" id="dx">✕</button><span id="dTag"></span><h2 id="dTitle"></h2><div class="muted" id="dSub"></div></header><div class="body" id="dBody"></div></aside>
+
+<script>
+/* ---------- demo data (shape mirrors normalised Maindeck attributes) ---------- */
+const PH={planning:["Planning","var(--ph-planning)"],yard_selection:["Yard selection","var(--ph-yard)"],kick_off:["Kick-off","var(--ph-kick)"],execution:["Execution","var(--ph-exec)"],closing:["Closing","var(--ph-closing)"]};
+const PHO=Object.keys(PH);
+const D=s=>new Date(s+"T00:00:00").getTime(), DAY=864e5, NOW=D("2026-11-05");
+const MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fd=t=>{const d=new Date(t);return `${d.getDate()} ${MN[d.getMonth()]} ${d.getFullYear()}`};
+const fs=t=>{const d=new Date(t);return `${d.getDate()} ${MN[d.getMonth()]}`};
+const usd=(n,c)=>Math.round(n).toLocaleString("en-GB")+(c?" "+c:"");
+const kusd=n=>n>=1e6?(n/1e6).toFixed(2).replace(/\.?0+$/,"")+"M":n>=1e3?Math.round(n/1e3)+"k":String(Math.round(n));
+
+const projects=[
+ {id:1,ship:"Ramform Vanguard",name:"Seismic air platform",phase:"kick_off",type:"General maintenance",from:"2026-10-25",to:"2026-12-20",prog:27},
+ {id:2,ship:"Ramform Atlas",name:"General maintenance 2026",phase:"execution",type:"General maintenance",from:"2026-03-02",to:"2026-12-31",prog:64},
+ {id:3,ship:"Ramform Victory",name:"Port call Rio 2026",phase:"closing",type:"Port call",from:"2026-11-01",to:"2026-11-16",prog:91},
+ {id:4,ship:"Ramform Titan",name:"Port call Cork 2026",phase:"yard_selection",type:"Port call",from:"2026-12-03",to:"2026-12-18",prog:0},
+ {id:5,ship:"Ramform Tethys",name:"Port call Las Palmas 2026",phase:"planning",type:"Port call",from:"2027-01-07",to:"2027-01-20",prog:0},
+ {id:6,ship:"Tansa",name:"Port call Luanda 2026",phase:"execution",type:"Port call",from:"2026-10-20",to:"2026-11-28",prog:48},
+ {id:7,ship:"Ramform Hyperion",name:"Dry dock 2027",phase:"planning",type:"Dry dock",from:"2027-03-01",to:"2027-04-15",prog:0},
+ {id:8,ship:"Ramform Titan",name:"General maintenance 2026",phase:"execution",type:"General maintenance",from:"2026-05-15",to:"2027-05-01",prog:58},
+];
+const ST={not_specified:["Not specified","#5F7193"],ordered:["Ordered","var(--accent)"],confirmed:["Confirmed","var(--accent)"],request_made_by_vessel:["Request made by vessel","var(--warn)"],fully_received:["Fully received","var(--accent-2)"],sent_to_vessel:["Sent to vessel","var(--violet)"],in_query:["In query","var(--danger)"]};
+const supplies=[
+ ["Kongsberg service personnel for thruster repair","73246","Kongsberg Maritime AS","ordered",45934,"464,862 NOK","2026-11-18"],
+ ["DNV diving inspection and propeller polish","73203","Subsea Partner","confirmed",31815,"321,968 NOK","2026-11-12"],
+ ["Radar/ECDIS monitor upgrade parts","72273","Furuno","fully_received",27491,"23,917 EUR","2026-10-30"],
+ ["Mobilisation of spare thrusters","72525","Kongsberg Maritime AS","request_made_by_vessel",12880,"",null],
+ ["DG2 alternator bearing parts","73024","ABB AS","sent_to_vessel",12099,"122,442 NOK","2026-11-09"],
+ ["DG2 alternator bearing service attendance","73027","ABB AS","ordered",7086,"71,710 NOK","2026-11-20"],
+ ["Fisher valves","71704","Emerson","fully_received",6858,"5,966 EUR","2026-10-22"],
+ ["Fire suppression system for fat fryer","72412","Fosstech AS","confirmed",6390,"64,667 NOK",null],
+ ["Boiler safety valves","72406","Parat Halvorsen AS","in_query",5731,"58,000 NOK",null],
+ ["Thruster parts needed for replacement","72239","Kongsberg Maritime AS","not_specified",2985,"30,208 NOK",null],
+].map((r,i)=>({id:i,name:r[0],po:r[1],supplier:r[2],status:r[3],usd:r[4],orig:r[5],delivery:r[6]?D(r[6]):null}));
+const wos=[
+ ["MARITIME","Replace crane cylinders for STB deck crane","2026-10-26","2026-11-08",100],
+ ["MARITIME","Thruster drive, minor service","2026-11-05","2026-11-29",60],
+ ["MARITIME","Pipe tunnel supply fan FWD, S-49 overhaul","2026-11-14","2026-12-01",30],
+ ["MARITIME","High suction sea chest (PS) outlet valve","2026-12-02","2026-12-10",0],
+ ["MARITIME","Rearrange drainline from helideck","","",0],
+ ["MECHANICAL","DG2 alternator bearing replacement","2026-11-09","2026-11-24",40],
+ ["MECHANICAL","Overhaul and inspect E-52 fan","2026-10-28","2026-11-04",100],
+ ["MECHANICAL","Boiler safety valve test","2026-11-25","2026-11-30",0],
+ ["MECHANICAL","Install new K-Pos","","",0],
+ ["SEISMIC","Install umbilical GR#3","2026-11-01","2026-11-12",70],
+ ["SEISMIC","Umbilical from gun reel #6","2026-11-16","2026-12-05",0],
+ ["SEISMIC","De-rig UHR streamers","2026-12-06","2026-12-14",0],
+].map(r=>({group:r[0],name:r[1],s:r[2]?D(r[2]):null,e:r[3]?D(r[3]):null,p:r[4]}));
+const econ=[["1. Docking & general services",120000,214000],["4. Ship equipment",630000,412000],["ELECTRO",1400000,1210000],["Management and project",380000,0],["TECHNICAL",725000,880000]];
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const tag=(t,c,solid)=>`<span class="tag" style="${solid?`background:${c};color:#06101F`:`background:color-mix(in srgb, ${c} 18%, transparent);color:${c}`}">${t}</span>`;
+const kpi=(v,l,s,c)=>`<div class="card kpi" style="--glow:${c}"><div class="v num" style="color:${c}">${v}</div><div class="l">${l}</div>${s?`<div class="s">${s}</div>`:""}</div>`;
+const execOf=w=>w.p>=100?"done":(w.s&&w.s<=NOW)||w.p>0?"progress":"todo";
+const EXC={done:"var(--accent-2)",progress:"var(--accent)",todo:"#5F7193"};
+
+/* ---------- fleet ---------- */
+let filter="active", current=projects[0];
+function renderFleet(){
+  const list=projects.filter(p=>filter==="all"||p.phase!=="closing");
+  const ongoing=list.filter(p=>D(p.from)<=NOW&&D(p.to)>=NOW), soon=list.filter(p=>D(p.from)>NOW&&D(p.from)-NOW<=30*DAY);
+  $("#fleetKpis").innerHTML=kpi(list.length,"Active projects",filter==="all"?"incl. closing":"excl. closing","var(--accent)")+kpi(ongoing.length,"Ongoing now","within the period today","var(--accent-2)")+kpi(soon.length,"Starting within 30 days",soon[0]?`Next: ${soon[0].name}`:"","var(--warn)")+kpi(new Set(list.map(p=>p.ship)).size,"Vessels involved","","var(--violet)");
+  // phase bar
+  const c=PHO.map(k=>[k,list.filter(p=>p.phase===k).length]).filter(x=>x[1]);
+  $("#phasebar").innerHTML=c.map(([k,n])=>`<i title="${PH[k][0]} ${n}" style="flex:${n};background:${PH[k][1]}"></i>`).join("");
+  $("#phaseLegend").innerHTML=c.map(([k,n])=>`<span><i style="background:${PH[k][1]}"></i>${PH[k][0]} <b style="color:var(--text)">${n}</b></span>`).join("");
+  $("#upcoming").innerHTML=list.filter(p=>D(p.from)>NOW).sort((a,b)=>D(a.from)-D(b.from)).slice(0,4).map(p=>`<li><span class="d" style="background:${PH[p.phase][1]}"></span><div><b>${p.ship}</b> · ${p.name}<span class="sub">Starts ${fd(D(p.from))} · in ${Math.ceil((D(p.from)-NOW)/DAY)} days</span></div></li>`).join("")||`<li class="dim">Nothing scheduled.</li>`;
+  // timeline
+  const lo=D("2026-09-01"), hi=D("2027-05-01"), pct=t=>Math.max(0,Math.min(100,(t-lo)/(hi-lo)*100));
+  const ticks=[];for(let d=new Date(lo);d.getTime()<hi;d.setMonth(d.getMonth()+1))ticks.push(d.getTime());
+  const ships=[...new Set(list.map(p=>p.ship))].sort();
+  $("#timeline").innerHTML=`<div class="axis">${ticks.map(t=>`<span style="left:${pct(t)}%">${MN[new Date(t).getMonth()]}${new Date(t).getMonth()===0?" 27":""}</span>`).join("")}</div>`+
+    ships.map(s=>`<div class="lane"><b>${s}</b><div class="track">${list.filter(p=>p.ship===s).map(p=>{const l=pct(D(p.from)),w=Math.max(1.2,pct(D(p.to))-l);return `<div class="bar" data-p="${p.id}" title="${p.name} · ${fd(D(p.from))} – ${fd(D(p.to))}" style="left:${l}%;width:${w}%;background:${PH[p.phase][1]}">${w>9?p.name:""}</div>`}).join("")}<div class="today" style="left:${pct(NOW)}%"></div></div></div>`).join("");
+  // board
+  $("#board").innerHTML=list.map(p=>{const on=D(p.from)<=NOW&&D(p.to)>=NOW, st=on?`<span style="color:var(--accent-2);font-weight:700">● Ongoing · ${Math.ceil((D(p.to)-NOW)/DAY)} d left</span>`:D(p.from)>NOW?`<span style="color:var(--warn);font-weight:700">Starts in ${Math.ceil((D(p.from)-NOW)/DAY)} d</span>`:`<span class="dim">Ended</span>`;
+    return `<div class="pcard" data-p="${p.id}" style="--c:${PH[p.phase][1]}"><div class="ship">${p.ship}</div><div class="name">${p.name}</div><div class="row">${tag(PH[p.phase][0],PH[p.phase][1],true)}<span>${p.type}</span><span style="margin-left:auto">${st}</span></div><div class="row" style="margin-top:8px"><span class="num">${fd(D(p.from))} – ${fd(D(p.to))}</span><span style="margin-left:auto" class="num">${p.prog}%</span></div><div class="prog"><i style="width:${p.prog}%;background:${PH[p.phase][1]}"></i></div></div>`}).join("");
+  document.querySelectorAll("[data-p]").forEach(el=>el.onclick=()=>openProject(+el.dataset.p));
+}
+document.querySelectorAll("#phaseFilter button").forEach(b=>b.onclick=()=>{document.querySelectorAll("#phaseFilter button").forEach(x=>x.classList.toggle("on",x===b));filter=b.dataset.f;renderFleet()});
+
+/* ---------- project ---------- */
+let ptab="overview", osStatus="all", osQ="";
+function openProject(id){current=projects.find(p=>p.id===id)||current;go("project")}
+function renderProject(){
+  const p=current;
+  $("#pShip").textContent=p.ship; $("#pName").textContent=p.name;
+  $("#pSub").textContent=`${p.type} · ${fd(D(p.from))} – ${fd(D(p.to))} · ${Math.max(0,Math.ceil((D(p.to)-NOW)/DAY))} days left`;
+  const ci=PHO.indexOf(p.phase);
+  $("#pStepper").innerHTML=PHO.map((k,i)=>`<span class="${i===ci?"on":i<ci?"past":""}" style="${i===ci?`background:${PH[k][1]}`:""}">${PH[k][0]}</span>`).join("");
+  const total=supplies.reduce((s,x)=>s+x.usd,0), dated=wos.filter(w=>w.s).length;
+  const T=[["overview","Overview"],["supplies","Owner supplies",supplies.length],["workorders","Work orders",wos.length],["economy","Economy"]];
+  $("#ptabs").innerHTML=T.map(([k,l,n])=>`<button data-t="${k}" class="${k===ptab?"on":""}">${l}${n!=null?`<span class="n">${n}</span>`:""}</button>`).join("");
+  document.querySelectorAll("#ptabs button").forEach(b=>b.onclick=()=>{ptab=b.dataset.t;renderProject()});
+  document.querySelectorAll(".ptab").forEach(el=>el.classList.toggle("hidden",el.dataset.t!==ptab));
+  const done=wos.filter(w=>execOf(w)==="done").length, avg=Math.round(wos.reduce((s,w)=>s+w.p,0)/wos.length), late=wos.filter(w=>w.e&&w.e<NOW&&w.p<100).length;
+  $("#pKpis").innerHTML=kpi(avg+"%","Average progress",`${wos.length} work orders`,"var(--accent-2)")+kpi(`${done} / ${wos.length}`,"Work orders completed",`${wos.length-dated} without dates`,"var(--accent)")+kpi(kusd(total)+" USD","Owner supplies",`${supplies.length} lines`,"var(--warn)")+kpi(supplies.filter(s=>!s.delivery).length,"No delivery date",`of ${supplies.length} owner supplies`,"var(--danger)");
+  // status stack
+  const sc=Object.keys(ST).map(k=>[k,supplies.filter(s=>s.status===k).length]).filter(x=>x[1]);
+  $("#osTotal").textContent=usd(total,"USD");
+  $("#osStack").innerHTML=sc.map(([k,n])=>`<i style="flex:${n};background:${ST[k][1]}" title="${ST[k][0]} ${n}"></i>`).join("");
+  $("#osLegend").innerHTML=sc.map(([k,n])=>`<span><i style="background:${ST[k][1]}"></i>${ST[k][0]} ${n}</span>`).join("");
+  const bySup={};supplies.forEach(s=>bySup[s.supplier]=(bySup[s.supplier]||0)+s.usd);
+  const sb=Object.entries(bySup).sort((a,b)=>b[1]-a[1]).slice(0,5), mx=sb[0][1];
+  $("#supBars").innerHTML=sb.map(([n,v])=>`<div class="hbar"><span>${n}</span><div class="t"><i style="width:${v/mx*100}%;background:var(--warn)"></i></div><b class="num" style="text-align:right">${usd(v)}</b></div>`).join("");
+  $("#followup").innerHTML=[
+    ["var(--danger)",`${late} work order${late===1?"":"s"} past end date`,"Thruster drive, minor service"],
+    ["var(--warn)",`${supplies.filter(s=>!s.delivery).length} owner supplies have no delivery date`,"Mobilisation of spare thrusters · Boiler safety valves …"],
+    ["var(--danger)","1 owner supply in query","Boiler safety valves · PO 72406"],
+    ["#5F7193",`${wos.length-dated} work orders have no start date`,"Data quality"],
+  ].map(([c,a,b])=>`<li><span class="d" style="background:${c}"></span><div><b>${a}</b><span class="sub">${b}</span></div></li>`).join("");
+  renderSupplies(); renderGantt(); renderEcon();
+}
+function renderSupplies(){
+  const seg=[["all","All"],["open","Open"],["received","Received"],["nodate","No date"]];
+  $("#osSeg").innerHTML=seg.map(([k,l])=>`<button data-s="${k}" class="${k===osStatus?"on":""}">${l}</button>`).join("");
+  document.querySelectorAll("#osSeg button").forEach(b=>b.onclick=()=>{osStatus=b.dataset.s;renderSupplies()});
+  const rows=supplies.filter(s=>(osStatus==="all"||(osStatus==="received"&&s.status==="fully_received")||(osStatus==="open"&&s.status!=="fully_received")||(osStatus==="nodate"&&!s.delivery))&&(!osQ||[s.name,s.po,s.supplier].join(" ").toLowerCase().includes(osQ)));
+  $("#osBody").innerHTML=rows.map(s=>`<tr data-s="${s.id}"><td><b style="font-weight:600">${s.name}</b></td><td class="num muted">${s.po}</td><td class="muted">${s.supplier}</td><td>${tag(ST[s.status][0],ST[s.status][1])}</td><td class="num ${s.delivery?"muted":""}" style="${s.delivery?"":"color:var(--warn);font-weight:600"}">${s.delivery?fd(s.delivery):"—"}</td><td class="r num"><b>${usd(s.usd)}</b>${s.orig?`<span class="sub">${s.orig}</span>`:""}</td></tr>`).join("")||`<tr><td colspan="6" class="dim" style="text-align:center;padding:30px">No owner supplies match.</td></tr>`;
+  document.querySelectorAll("#osBody tr[data-s]").forEach(tr=>tr.onclick=()=>openSupply(+tr.dataset.s,tr));
+}
+$("#osSearch").oninput=e=>{osQ=e.target.value.toLowerCase();renderSupplies()};
+function renderGantt(){
+  const lo=D("2026-10-20"), hi=D("2026-12-22"), pct=t=>(t-lo)/(hi-lo)*100;
+  const ticks=[];for(let t=D("2026-10-26");t<hi-3*DAY;t+=7*DAY)ticks.push(t);
+  let h=`<div class="g-head"><div></div><div style="position:relative">${ticks.map(t=>`<span style="position:absolute;left:${pct(t)}%;transform:translateX(-50%)">${fs(t)}</span>`).join("")}</div></div>`;
+  const groups=[...new Set(wos.map(w=>w.group))];
+  for(const g of groups){
+    const ws=wos.filter(w=>w.group===g), gd=ws.filter(w=>w.s), ga=Math.round(ws.reduce((s,w)=>s+w.p,0)/ws.length);
+    const gs=Math.min(...gd.map(w=>w.s)), ge=Math.max(...gd.map(w=>w.e));
+    h+=`<div class="g-row grp"><div class="lab"><span class="t">${g}</span><span class="p">${ga}%</span></div><div class="trk">${gd.length?`<div class="gb" style="left:${pct(gs)}%;width:${pct(ge)-pct(gs)}%;top:12px;height:6px;background:#2C3D61"><i style="width:${ga}%;background:var(--muted)"></i></div>`:""}<div class="today" style="position:absolute;top:0;bottom:0;width:2px;left:${pct(NOW)}%;background:var(--danger)"></div></div></div>`;
+    for(const w of ws){const k=execOf(w),c=EXC[k];
+      h+=`<div class="g-row"><div class="lab"><span style="width:8px;height:8px;border-radius:50%;background:${c};flex:none"></span><span class="t ${w.s?"":"dim"}">${w.name}</span><span class="p num">${w.p}%</span></div><div class="trk">${w.s?`<div class="gb" title="${fs(w.s)} – ${fs(w.e)}" style="left:${pct(w.s)}%;width:${Math.max(.8,pct(w.e)-pct(w.s))}%;background:color-mix(in srgb, ${c} 28%, transparent)"><i style="width:${k==="done"?100:w.p}%;background:${c}"></i></div>`:`<span class="nd">no dates in Maindeck</span>`}<div style="position:absolute;top:0;bottom:0;width:2px;left:${pct(NOW)}%;background:var(--danger);opacity:.7"></div></div></div>`;}
+  }
+  $("#gantt").innerHTML=h;
+}
+function renderEcon(){
+  const est=econ.reduce((s,r)=>s+r[1],0), com=econ.reduce((s,r)=>s+r[2],0), mx=Math.max(...econ.flatMap(r=>[r[1],r[2]]));
+  $("#eKpis").innerHTML=kpi(kusd(est),"Estimate","USD","var(--muted)")+kpi(kusd(com),"Committed","final › billed › total","var(--accent)")+kpi(kusd(Math.abs(est-com)),com>est?"Over estimate":"Remaining",Math.round(com/est*100)+"% of estimate used",com>est?"var(--danger)":"var(--accent-2)")+kpi(econ.filter(r=>r[2]>r[1]).length,"Groups over estimate","","var(--danger)");
+  $("#econBars").innerHTML=econ.map(([n,e,c])=>`<div class="hbar" style="grid-template-columns:220px 1fr 170px"><span>${n}</span><div style="display:grid;gap:3px"><div class="t"><i style="width:${e/mx*100}%;background:#5F7193"></i></div><div class="t"><i style="width:${c/mx*100}%;background:${c>e?"var(--danger)":"var(--accent)"}"></i></div></div><span class="num" style="text-align:right;${c>e?"color:var(--danger);font-weight:700":""}">${usd(c)} / ${usd(e)}</span></div>`).join("")+`<div class="legend" style="margin-top:12px"><span><i style="background:#5F7193"></i>Estimate</span><span><i style="background:var(--accent)"></i>Committed</span><span><i style="background:var(--danger)"></i>Over estimate</span></div>`;
+}
+
+/* ---------- drawer ---------- */
+function openSupply(id,tr){
+  const s=supplies[id]; document.querySelectorAll("#osBody tr").forEach(r=>r.classList.toggle("sel",r===tr));
+  $("#dTag").innerHTML=tag(ST[s.status][0],ST[s.status][1]); $("#dTitle").textContent=s.name; $("#dSub").textContent=`PO ${s.po} · ${s.supplier}`;
+  const linked=wos.filter(w=>s.name.split(" ").some(x=>x.length>4&&w.name.toLowerCase().includes(x.toLowerCase()))).slice(0,3);
+  $("#dBody").innerHTML=`<div class="big num">${usd(s.usd,"USD")}</div><div class="muted" style="margin-bottom:20px">${s.orig?`Original ${s.orig}`:"Booked in USD"}</div>
+   <dl class="kv"><dt>Delivery</dt><dd style="${s.delivery?"":"color:var(--warn)"}">${s.delivery?fd(s.delivery):"Not set"}</dd><dt>Category</dt><dd>Service and repairs</dd><dt>Location</dt><dd>—</dd><dt>Equipment</dt><dd>—</dd></dl>
+   <h3 class="muted" style="font-size:13px;margin:24px 0 8px">Connected work orders</h3><ul class="fu">${linked.map(w=>`<li><span class="d" style="background:${EXC[execOf(w)]}"></span><div><b>${w.name}</b><span class="sub">${w.group} · ${w.p}%</span></div></li>`).join("")||`<li class="dim">None linked in Maindeck.</li>`}</ul>`;
+  $("#drawer").classList.add("open");
+}
+$("#dx").onclick=()=>{$("#drawer").classList.remove("open");document.querySelectorAll("#osBody tr").forEach(r=>r.classList.remove("sel"))};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#dx").click();if(e.key==="/"&&document.activeElement.tagName!=="INPUT"){e.preventDefault();$("#gsearch").focus()}});
+
+/* ---------- routing ---------- */
+function go(v){
+  document.querySelectorAll(".view").forEach(el=>el.classList.toggle("on",el.id==="v-"+v));
+  document.querySelectorAll(".rail [data-go]").forEach(b=>b.classList.toggle("on",b.dataset.go===v));
+  $("#crumb").innerHTML=v==="fleet"?`<span>Fleet</span>`:`<a data-go="fleet">Fleet</a><span class="sep">/</span><span>${current.ship}</span><span class="sep">/</span><span>${current.name}</span>`;
+  $("#crumb [data-go]")?.addEventListener("click",()=>go("fleet"));
+  v==="fleet"?renderFleet():renderProject();
+}
+document.querySelectorAll(".rail [data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+go("fleet");
+</script>
+</body>
+</html>
