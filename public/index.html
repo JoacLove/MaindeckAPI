@@ -20,8 +20,8 @@
         <div class="hero-copy">
           <h1>Projects and jobs, live from production.</h1>
           <p>
-            Browse every team, project, and work order your credentials can
-            reach — status, progress, and detail in one dark workspace.
+            Browse teams, projects, jobs, owner supply, and estimation lines
+            your credentials can reach — one dark workspace.
           </p>
           <div class="cta-row">
             <button type="button" class="btn btn-primary" id="openBtn">
@@ -56,15 +56,27 @@
         <div class="layout">
           <section aria-labelledby="jobsHeading">
             <div class="panel-head">
-              <h2 id="jobsHeading">Work orders</h2>
+              <h2 id="jobsHeading">Browse</h2>
               <span class="meta" id="jobsMeta">Pick a project</span>
             </div>
             <div class="tabs" id="resourceTabs" role="tablist">
               <button type="button" class="tab active" data-tab="jobs">Jobs</button>
-              <button type="button" class="tab" data-tab="groups">Groups</button>
               <button type="button" class="tab" data-tab="supplies">Owner supply</button>
+              <button type="button" class="tab" data-tab="groups">Groups</button>
               <button type="button" class="tab" data-tab="ships">Ships</button>
               <button type="button" class="tab" data-tab="inspections">Inspections</button>
+            </div>
+            <div class="list-filters" id="supplyFilters" hidden>
+              <div class="field">
+                <label for="categoryFilter">Category</label>
+                <select id="categoryFilter">
+                  <option value="">All categories</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="supplySearch">Search</label>
+                <input id="supplySearch" type="search" placeholder="Name, PO, supplier…" />
+              </div>
             </div>
             <div id="listHost">
               <p class="empty">Select a project to load work orders.</p>

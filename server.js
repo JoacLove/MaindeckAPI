@@ -39,9 +39,13 @@ function handleError(res, err) {
     });
   }
   if (err instanceof md.MaindeckApiError) {
+    const code =
+      err.body?.error === "invalid_id" || err.body?.error === "invalid_path"
+        ? err.body.error
+        : "maindeck_api";
     return sendJson(res, err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 502, {
       ok: false,
-      error: "maindeck_api",
+      error: code,
       message: err.message,
       details:
         err.body && typeof err.body === "object"
@@ -88,7 +92,7 @@ function serveStatic(req, res, urlPath) {
 }
 
 /** Match /api/... patterns and dispatch. Returns true if handled. */
-async function handleApi(req, res, pathname) {
+async function handleApi(req, res, pathname, searchParams) {
   if (req.method !== "GET") {
     sendJson(res, 405, { ok: false, error: "method_not_allowed" });
     return true;
@@ -129,137 +133,155 @@ async function handleApi(req, res, pathname) {
       return true;
     }
 
+    /** Decode + validate a path id (blocks SSRF / traversal). */
+    function idAt(raw) {
+      return md.assertSafeId(decodeURIComponent(raw));
+    }
+
     let m;
 
     m = pathname.match(/^\/api\/teams\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getTeam(decodeURIComponent(m[1])));
+      await ok(res, await md.getTeam(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/teams\/([^/]+)\/projects$/);
     if (m) {
-      await ok(res, await md.listTeamProjects(decodeURIComponent(m[1])));
+      await ok(res, await md.listTeamProjects(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/teams\/([^/]+)\/ships$/);
     if (m) {
-      await ok(res, await md.listTeamShips(decodeURIComponent(m[1])));
+      await ok(res, await md.listTeamShips(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/teams\/([^/]+)\/inspections$/);
     if (m) {
-      await ok(res, await md.listTeamInspections(decodeURIComponent(m[1])));
+      await ok(res, await md.listTeamInspections(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/teams\/([^/]+)\/inspection_templates$/);
     if (m) {
-      await ok(res, await md.listTeamInspectionTemplates(decodeURIComponent(m[1])));
+      await ok(res, await md.listTeamInspectionTemplates(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/teams\/([^/]+)\/offices$/);
     if (m) {
-      await ok(res, await md.listTeamOffices(decodeURIComponent(m[1])));
+      await ok(res, await md.listTeamOffices(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/teams\/([^/]+)\/owner_supply_categories$/);
     if (m) {
-      await ok(res, await md.listTeamOwnerSupplyCategories(decodeURIComponent(m[1])));
+      await ok(res, await md.listTeamOwnerSupplyCategories(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/projects\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getProject(decodeURIComponent(m[1])));
+      await ok(res, await md.getProject(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/projects\/([^/]+)\/work_orders$/);
     if (m) {
-      await ok(res, await md.listProjectWorkOrders(decodeURIComponent(m[1])));
+      await ok(res, await md.listProjectWorkOrders(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/projects\/([^/]+)\/groups$/);
     if (m) {
-      await ok(res, await md.listProjectGroups(decodeURIComponent(m[1])));
+      await ok(res, await md.listProjectGroups(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/projects\/([^/]+)\/owners$/);
     if (m) {
-      await ok(res, await md.listProjectOwners(decodeURIComponent(m[1])));
+      await ok(res, await md.listProjectOwners(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/projects\/([^/]+)\/owner_supplies$/);
     if (m) {
-      await ok(res, await md.listProjectOwnerSupplies(decodeURIComponent(m[1])));
+      const projectId = idAt(m[1]);
+      const teamId = searchParams.get("team_id");
+      if (teamId) {
+        await ok(res, await md.listProjectOwnerSuppliesEnriched(projectId, idAt(teamId)));
+      } else {
+        const items = await md.listProjectOwnerSupplies(projectId);
+        await ok(res, { items, categories: [] });
+      }
       return true;
     }
 
     m = pathname.match(/^\/api\/work_orders\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getWorkOrder(decodeURIComponent(m[1])));
+      await ok(res, await md.getWorkOrder(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/work_orders\/([^/]+)\/work_done_report$/);
     if (m) {
-      await ok(res, await md.getWorkDoneReport(decodeURIComponent(m[1])));
+      await ok(res, await md.getWorkDoneReport(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/work_orders\/([^/]+)\/owner_supplies$/);
     if (m) {
-      await ok(res, await md.listWorkOrderOwnerSupplies(decodeURIComponent(m[1])));
+      await ok(res, await md.listWorkOrderOwnerSupplies(idAt(m[1])));
+      return true;
+    }
+
+    m = pathname.match(/^\/api\/work_orders\/([^/]+)\/cost_items$/);
+    if (m) {
+      await ok(res, await md.listWorkOrderCostItems(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/ships\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getShip(decodeURIComponent(m[1])));
+      await ok(res, await md.getShip(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/groups\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getGroup(decodeURIComponent(m[1])));
+      await ok(res, await md.getGroup(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/inspections\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getInspection(decodeURIComponent(m[1])));
+      await ok(res, await md.getInspection(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/inspections\/([^/]+)\/items$/);
     if (m) {
-      await ok(res, await md.listInspectionItems(decodeURIComponent(m[1])));
+      await ok(res, await md.listInspectionItems(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/inspection_templates\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getInspectionTemplate(decodeURIComponent(m[1])));
+      await ok(res, await md.getInspectionTemplate(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/owner_supplies\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getOwnerSupply(decodeURIComponent(m[1])));
+      await ok(res, await md.getOwnerSupply(idAt(m[1])));
       return true;
     }
 
     m = pathname.match(/^\/api\/owner_supply_categories\/([^/]+)$/);
     if (m) {
-      await ok(res, await md.getOwnerSupplyCategory(decodeURIComponent(m[1])));
+      await ok(res, await md.getOwnerSupplyCategory(idAt(m[1])));
       return true;
     }
 
@@ -275,7 +297,7 @@ const server = http.createServer(async (req, res) => {
   const { pathname } = url;
 
   if (pathname.startsWith("/api/") || pathname === "/health") {
-    const handled = await handleApi(req, res, pathname);
+    const handled = await handleApi(req, res, pathname, url.searchParams);
     if (handled) return;
     return sendJson(res, 404, { ok: false, error: "not_found" });
   }
