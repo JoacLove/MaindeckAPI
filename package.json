@@ -1,15 +1,13 @@
 {
   "name": "maindeck-api",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Maindeck client-credentials OAuth + dark REST browser",
+  "description": "Maindeck Reader — read-only fleet/project browser",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "me": "node cli.js me",
-    "teams": "node cli.js teams",
-    "projects": "node cli.js projects"
+    "me": "node cli.js me"
   },
   "engines": {
     "node": ">=18"
